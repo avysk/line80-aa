@@ -1,9 +1,119 @@
         .PAGE   1
         .ROM
         .BIOS
+        .BIOSVARS
+        .ZILOG                  ; I want to use standard Z80 syntax
 
-        ld      a,'A'
-        call    CHPUT
+FROM_X  EQU     50
+TO_X    EQU     200
+FROM_Y  EQU     50
+TO_Y    EQU     77
+
+ERROR   EQU     $E000
+THR     EQU     [ERROR+1]
+DX      EQU     [THR+3]
+DY      EQU     [DX+1]
+
+COLORS:
+        ; GGGRRRBB
+        .DB     $FF             ; white
+        .DB     [4<<5]+[4<<2]+2 ; light gray
+        .DB     [2<<5]+[2<<2]+1 ; dark gray
+        .DB     0               ; black
+
+; start by calculation of initial values for accumulators
+        ld      a,TO_X
+        sub     FROM_X          ; a = dx
+        ld      (DX),a
+        ld      ix,THR
+        rra                     ; a = dx / 2
+        ld      (ix+1),a
+        ld      b,a             ; b = dx / 2
+        rra                     ; a = dx / 4
+        ld      (ix),a
+        add     a,b             ; a = 3dx / 4
+        ld      (ix+2),a
+        ld      a,TO_Y
+        sub     FROM_Y          ; a = dy
+        ld      (DY),a
+        xor     a
+        ld      (ERROR),a
+
+        ; set colors
+        ld      a,$FF           ; white
+        ld      (FORCLR),a
+        xor     a
+        ld      (BAKCLR),a
+        ld      (BDRCLR),a
+        call    CHGCLR
+        ; now enter screen 8
+        ld      a,8
+        call    CHGMOD
+
+        ; now draw line pixel by pixel
+        ld      h,FROM_Y
+        ld      l,FROM_X
+@@draw:
+        ; in this loop we suppose that h is set to Y and l to X
+
+        ; start by determining color of the upper pixel
+        ld      a,(ERROR)
+        ld      ix,THR
+        ld      b,3
+@@loop: ld      c,(ix)
+        cp      c
+        jr      c,@@cont        ; accumulated error < threshold1
+        inc     ix              ; next threshold
+        djnz    @@loop
+@@cont:
+        ; here b =
+        ; 3 if error < first threshold,
+        ; 2 if error < second threshold,
+        ; 1 if error < third threshold,
+        ; 0 otherwise
+        ld      ix,COLORS
+        ld      c,b
+        ld      b,0
+        push    bc
+        add     ix,bc
+        ld      a,(ix)          ; if b was 3, color is black, if 0, color is white...
+        ; now in a we have a color of pixel (X, Y+1)
+        inc     h
+        call    NWRVRM          ; put the pixel (l, h) on screen
+        dec     h
+        pop     bc
+        ld      ix,COLORS
+        ld      a,c
+        neg
+        add     a,3
+        ld      c,a
+        add     ix,bc
+        ld      a,(ix)
+        call    NWRVRM
+
+        ; are we done?
+        ld      a,l
+        cp      TO_X
+        jr      z,@@end
+
+        ; now adjust error
+        ld      a,(DX)
+        ld      b,a             ; b = dx
+        ld      a,(DY)
+        ld      c,a             ; c = dy
+        ld      a,(ERROR)       ; a = E
+        add     a,c             ; a = E + dy
+        jr      c,@@sub         ; if it is overflow, surely sum >= dx
+        cp      b               ; try to decrease it by dx
+        jr      c,@@cont2       ; failure, it was less than dx
+@@sub:
+        ; if we are here, we need to decrease A by dx and advance Y
+        sub     b
+        inc     h
+@@cont2:
+        ld      (ERROR),a
+        inc     l
+        jr      @@draw
 
 @@end:
         jr      @@end
