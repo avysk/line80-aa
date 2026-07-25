@@ -5,34 +5,42 @@
         .ZILOG                  ; I want to use standard Z80 syntax
 
 FROM_X  EQU     50
-TO_X    EQU     200
-FROM_Y  EQU     50
-TO_Y    EQU     77
+TO_X    EQU     256-FROM_X
+FROM_Y  EQU     90
+TO_Y    EQU     212-FROM_Y
+
+LEVELS  EQU     8
 
 ERROR   EQU     $E000
 THR     EQU     [ERROR+1]
-DX      EQU     [THR+3]
+DX      EQU     [THR+LEVELS-1]
 DY      EQU     [DX+1]
 
-COLORS:
-        ; GGGRRRBB
-        .DB     $FF             ; white
-        .DB     [4<<5]+[4<<2]+2 ; light gray
-        .DB     [2<<5]+[2<<2]+1 ; dark gray
-        .DB     0               ; black
 
 ; start by calculation of initial values for accumulators
         ld      a,TO_X
         sub     FROM_X          ; a = dx
         ld      (DX),a
         ld      ix,THR
-        rra                     ; a = dx / 2
-        ld      (ix+1),a
-        ld      b,a             ; b = dx / 2
-        rra                     ; a = dx / 4
-        ld      (ix),a
-        add     a,b             ; a = 3dx / 4
-        ld      (ix+2),a
+        ld      d,0
+        ld      e,a             ; de = dx
+        ld      hl,0            ; hl = k * dx
+        ld      b,[LEVELS-1]
+@@thrloop:
+        add     hl,de
+        push    hl
+        ; now divide hl by 8
+        srl     h
+        rr      l
+        srl     h
+        rr      l
+        srl     h
+        rr      l
+        ld      (ix),l
+        inc     ix
+        pop     hl
+        djnz    @@thrloop
+
         ld      a,TO_Y
         sub     FROM_Y          ; a = dy
         ld      (DY),a
@@ -59,18 +67,13 @@ COLORS:
         ; start by determining color of the upper pixel
         ld      a,(ERROR)
         ld      ix,THR
-        ld      b,3
+        ld      b,[LEVELS-1]
 @@loop: ld      c,(ix)
         cp      c
         jr      c,@@cont        ; accumulated error < threshold1
         inc     ix              ; next threshold
         djnz    @@loop
 @@cont:
-        ; here b =
-        ; 3 if error < first threshold,
-        ; 2 if error < second threshold,
-        ; 1 if error < third threshold,
-        ; 0 otherwise
         ld      ix,COLORS
         ld      c,b
         ld      b,0
@@ -85,7 +88,7 @@ COLORS:
         ld      ix,COLORS
         ld      a,c
         neg
-        add     a,3
+        add     a,[LEVELS-1]
         ld      c,a
         add     ix,bc
         ld      a,(ix)
@@ -117,3 +120,14 @@ COLORS:
 
 @@end:
         jr      @@end
+
+COLORS:
+        ; GGGRRRBB
+        .DB     7<<5
+        .DB     6<<5
+        .DB     5<<5
+        .DB     4<<5
+        .DB     3<<5
+        .DB     2<<5
+        .DB     1<<5
+        .DB     0               ; black
