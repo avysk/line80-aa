@@ -1,0 +1,9 @@
+        .PAGE   1
+        .ROM
+        .BIOS
+
+        ld      a,'A'
+        call    CHPUT
+
+@@end:
+        jr      @@end
