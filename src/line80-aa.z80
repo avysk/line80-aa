@@ -4,20 +4,20 @@
         .BIOSVARS
         .ZILOG                  ; I want to use standard Z80 syntax
 
-FROM_X  EQU     50
-TO_X    EQU     256-FROM_X
-FROM_Y  EQU     90
-TO_Y    EQU     212-FROM_Y
+FROM_X  EQU     50              ;! starting (left) x-coordinate of the line
+TO_X    EQU     256-FROM_X      ;! ending (right) x-coordinate of the line
+FROM_Y  EQU     90              ;! starting (top) y-coordinate of the line
+TO_Y    EQU     212-FROM_Y      ;! ending (bottom) y-coordinate of the line
 
-LEVELS  EQU     8
+LEVELS  EQU     8               ;! number of available colors
 
-ERROR   EQU     $E000
-THR     EQU     [ERROR+1]
-DX      EQU     [THR+LEVELS-1]
-DY      EQU     [DX+1]
+ERROR   EQU     $E000           ;! Accumulated "error"
+THR     EQU     ERROR+1         ;! Start of threshold table
+DX      EQU     THR+LEVELS-1    ;! height of the line
+DY      EQU     DX+1            ;! width of the line
 
 
-; start by calculation of initial values for accumulators
+        ; start by calculation of initial values for accumulators
         ld      a,TO_X
         sub     FROM_X          ; a = dx
         ld      (DX),a
@@ -25,7 +25,7 @@ DY      EQU     [DX+1]
         ld      d,0
         ld      e,a             ; de = dx
         ld      hl,0            ; hl = k * dx
-        ld      b,[LEVELS-1]
+        ld      b,LEVELS-1
 @@thrloop:
         add     hl,de
         push    hl
@@ -64,10 +64,10 @@ DY      EQU     [DX+1]
 @@draw:
         ; in this loop we suppose that h is set to Y and l to X
 
-        ; start by determining color of the upper pixel
+        ; start by determining color of the lower pixel (with bigger Y)
         ld      a,(ERROR)
         ld      ix,THR
-        ld      b,[LEVELS-1]
+        ld      b,LEVELS-1
 @@loop: ld      c,(ix)
         cp      c
         jr      c,@@cont        ; accumulated error < threshold1
@@ -79,7 +79,7 @@ DY      EQU     [DX+1]
         ld      b,0
         push    bc
         add     ix,bc
-        ld      a,(ix)          ; if b was 3, color is black, if 0, color is white...
+        ld      a,(ix)
         ; now in a we have a color of pixel (X, Y+1)
         inc     h
         call    NWRVRM          ; put the pixel (l, h) on screen
@@ -88,7 +88,7 @@ DY      EQU     [DX+1]
         ld      ix,COLORS
         ld      a,c
         neg
-        add     a,[LEVELS-1]
+        add     a,LEVELS-1
         ld      c,a
         add     ix,bc
         ld      a,(ix)
@@ -121,7 +121,7 @@ DY      EQU     [DX+1]
 @@end:
         jr      @@end
 
-COLORS:
+COLORS:                         ;! the color shades, from the most bright to black
         ; GGGRRRBB
         .DB     7<<5
         .DB     6<<5
