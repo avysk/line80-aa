@@ -16,7 +16,6 @@ THR     EQU     ERROR+1         ;! Start of threshold table
 DX      EQU     THR+LEVELS-1    ;! height of the line
 DY      EQU     DX+1            ;! width of the line
 
-
         ; start by calculation of initial values for accumulators
         ld      a,TO_X
         sub     FROM_X          ; a = dx
@@ -58,6 +57,14 @@ DY      EQU     DX+1            ;! width of the line
         ld      a,8
         call    CHGMOD
 
+        ; load appropriate port numbers and hot-patch the code
+        ld      a,(VDP_DW)
+        ld      (@@port5+1),a
+        inc     a
+        ld      (@@port1+1),a
+        ld      (@@port2+1),a
+        ld      (@@port3+1),a
+        ld      (@@port4+1),a
         ; now draw line pixel by pixel
         ld      h,FROM_Y
         ld      l,FROM_X
@@ -82,7 +89,7 @@ DY      EQU     DX+1            ;! width of the line
         ld      a,(ix)
         ; now in a we have a color of pixel (X, Y+1)
         inc     h
-        call    NWRVRM          ; put the pixel (l, h) on screen
+        call    PSET
         dec     h
         pop     bc
         ld      ix,COLORS
@@ -92,7 +99,7 @@ DY      EQU     DX+1            ;! width of the line
         ld      c,a
         add     ix,bc
         ld      a,(ix)
-        call    NWRVRM
+        call    PSET
 
         ; are we done?
         ld      a,l
@@ -120,6 +127,33 @@ DY      EQU     DX+1            ;! width of the line
 
 @@end:
         jr      @@end
+
+;! put on screen 8 a pixel (l, h) with color in a
+PSET:
+        ld      c,a             ;store color
+        ld      a,h
+        rlca
+        rlca
+        and     $03             ; two highest bits of Y coordinate
+        di                      ; now we're going to talk to VDP
+@@port1:
+        out     ($99),a
+        ld      a,$80|14        ; we're going to write them to register 14
+@@port2:
+        out     ($99),a         ; now we have two highest bits of Y in R14
+        ld      a,l
+@@port3:
+        out     ($99),a         ; write X
+        ld      a,h
+        and     $3F             ; now extract low 6 bits of Y
+        or      $40             ; and set right VDP command
+@@port4:
+        out     ($99),a         ; write low 6 bits of Y (high ones are in R14) and command
+@@port5:
+        ld      a,c
+        out     ($98),a         ; write color
+        ei                      ; we're done
+        ret
 
 COLORS:                         ;! the color shades, from the most bright to black
         ; GGGRRRBB
